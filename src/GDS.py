@@ -3,7 +3,11 @@ import pysam
 import matplotlib.pyplot as plt
 import pandas as pd
 import csv
+import statsmodels.api as sm
 
+########################################################################################################
+# Mutation Distribution Across gene
+########################################################################################################
 class Variant():
     def __init__(self, ID, Chr, Pos, AC):
         self.ID = str(Chr) + "-" + ID
@@ -105,7 +109,49 @@ def Percentile(Percents, Mut_Den, l):
     return res
             
 
+########################################################################################################
+# GDS 
+########################################################################################################
+def poisson_reg(X_train, y_train):
+    res = sm.GLM(y_train, X_train, family=sm.families.Poisson()).fit()
+    return res
 
+def GDS_one_gene_tissue(gene, Tissue, Dat, rel_exp):
+    exons = {}
+    for exon in Dat[gene].Exons:
+        exons[exon.ID] = exon
+    tmp_x = rel_exp[rel_exp["Description"]==gene]
+    Tissues = tmp_x.columns.values[1:-1]
+    for i, row in tmp_x.iterrows():
+        exon_id = row["Name"]
+        tmp_x.loc[i, "intercept"] = 1
+        tmp_x.loc[i, "N_mut"] = np.sum([var.AC for var in exons[exon_id].Vars])
+    x_train = tmp_x[Tissue].values
+    y_train = tmp_x["N_mut"].values
+    print(x_train)
+    plt.scatter(x_train, y_train)
+
+
+def GDS_one_gene(Dat, gene, rel_exp):
+    exons = {}
+    for exon in Dat[gene].Exons:
+        exons[exon.ID] = exon
+    tmp_x = rel_exp[rel_exp["Description"]==gene]
+    Tissues = tmp_x.columns.values[1:-1]
+    for i, row in tmp_x.iterrows():
+        exon_id = row["Name"]
+        tmp_x.loc[i, "intercept"] = 1
+        tmp_x.loc[i, "N_mut"] = np.sum([var.AC for var in exons[exon_id].Vars])
+    for Tissue in Tissues:
+        #print(Tissue)
+        x_train = tmp_x[["intercept", Tissue]]
+        #x_train[Tissue] = np.exp(x_train[Tissue])
+        #print(x_train[Tissue])
+        y_train = tmp_x["N_mut"]
+        res = poisson_reg(x_train, y_train)
+        alpha, beta = res.params["intercept"], res.params[Tissue]
+        p_alpha, p_beta = res.pvalues["intercept"], res.pvalues[Tissue]
+        print(Tissue, beta, p_beta) 
 
 
 
